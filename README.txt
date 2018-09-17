@@ -40,6 +40,3 @@ message 发送的信息
 phone 发送信息的手机号码 必填
 
 发送的结果response--success，fail
-
-再好的说明文件都没用
-啊打发打发手动阀手动阀
