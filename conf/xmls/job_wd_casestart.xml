@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="orderwork" default="default" basedir="../..">
+	<taskdef resource="com/nantian/job/task/taskdefs.xml" />
+	<typedef name="order" classname="nantian.order.task.OrderTask" onerror="ignore" />
+	<property name="xmlfilename" value="job_wd_casestart"/>
+	<tstamp>
+		<format property="log.date" pattern="yyyyMMdd"/>
+	</tstamp>
+	<tstamp>
+		<format property="log.datetime" pattern="yyyy-MM-dd HH:mm:ss.SSS"/>
+	</tstamp>
+	<!--需传一个数据库配置文件的完整路径-->
+		<target name="default">
+			<trycatch property="err">
+			<try>
+				<order datasource="dataSource" />
+			</try>
+			<catch>
+			<ant antfile="${basedir}/antxml/job_mq_err_loginfo.xml"  inheritRefs="true"   target="default">
+				<property name="seq_no" value=""/>
+				<property name="dev_code" value=""/>
+				<property name="job_nm" value="job_create_case"/>
+				<property name="target_nm" value="default"/>
+				<property name="errinfo" value="${err}"/>
+				<property name="co" value=""/>
+				<property name="queue_nm" value=""/>
+			</ant>
+			</catch>
+		</trycatch>
+		<echo>run java file finish.......</echo>
+		</target>
+	</project>

@@ -1,0 +1,229 @@
+<?xml version="1.0"	encoding="utf-8"?>
+<project name="JOB_RUN_THE_JOB"	basedir="."	default="default">
+	<taskdef resource="com/nantian/job/task/taskdefs.xml"/>
+	<property file="/conf/base/job_base.properties"/>
+	
+	<target name="default">
+		<!-- 初始化环境与参数 -->
+		<echo>-----运行作业 ${job.name} ${job.desc} 作业类型：${job.jobTypeStr}</echo>
+		<var name="ds_base_param" value="-domain ${ds_srv_domain} -user ${ds_user} -password ${ds_pwd} -server ${ds_srv_name}"/>
+		<var name="ds_custom_param" value="-param $ETL_DD=${etl_dd} -param $DATA_FILE_PATH=${data_dir}"/>
+		<var name="log.stime" unset="true"/>
+		<var name="log_stime" unset="true"/>		
+		<tstamp>
+			<format property="log.stime" pattern="yyyy-MM-dd HH:mm:ss.SSS"/>
+			<format property="log_stime" pattern="yyyyMMddHHmmssSSS"/>
+		</tstamp>
+		<echo message="${log.stime} ${etl_dd} ${job.name}"/>
+		<var name="log.htm" value="${data_dir}/DSSTATUS/logs/${job.name}[${log_stime}].htm"/>
+		<!-- 标记开始运行 -->
+		<sqlexec datasource="dataSource" hidestatinfo="true" autocommit="true">
+			update job_parameter set 
+					para_desc='${log.stime}',
+					para_last_modify='${log.stime}',
+					para_type='R'
+				where para_category='${etl_dd}' and para_id='${job.name}';
+			insert into job_run_history(job_name,task_id,status,star_time,last_run_time,run_time)
+				values('${job.name}','${log.stime}','RUNNING','${log.stime}','${log.stime}','');
+		</sqlexec>		
+		<!-- 判断作业类型,根据需要配置运行参数,并执行 -->
+		<if>
+			<matches pattern="job_exec_[\S]+" string="${job.name}"/>
+			<then>
+				<antcallback target="exec" inheritRefs="true" return="execResult">
+					<param name="job.name" value="${job.name}"/>
+					<param name="log.htm"  value="${log.htm}"/>
+				</antcallback>	
+			</then>
+			<elseif>
+				<available file="${basedir}/conf/xmls/${job.name}.xml"/>
+				<then>
+					<antcallback target="exec_ant_file" inheritRefs="true" return="execResult">
+						<param name="job.name" value="${job.name}"/>
+					</antcallback>	
+				</then>
+			</elseif>
+			<else>
+				<echo message="job name error: [${job.name}]" level="error"/>
+				<var name="execResult" value="-1"/>				
+			</else>					
+		</if>
+		<!-- 标记执行结果,判断条件请看注释 -->
+		<tstamp>
+			<format property="log.etime" pattern="yyyy-MM-dd HH:mm:ss.SSS"/>
+		</tstamp>
+		<if>
+			<or><equals arg1="${execResult}" arg2="1"/><equals arg1="${execResult}" arg2="11"/></or>
+			<then><var name="run_result" value="F"/></then>
+			<elseif>
+				<or><equals arg1="${execResult}" arg2="2"/><equals arg1="${execResult}" arg2="12"/></or>
+    			<then><var name="run_result" value="#"/></then>
+			</elseif>
+			<else><var name="run_result" value="A"/></else>
+		</if>
+		<sqlexec datasource="dataSource" hidestatinfo="true"  autocommit="true">
+			update job_parameter set para_last_modify='${log.etime}',para_type='${run_result}'
+				where para_category='${etl_dd}' and para_id='${job.name}';
+			update job_run_history set last_run_time='${log.etime}',status='${run_result}'
+				where  job_name='${job.name}' and task_id='${log.stime}';
+		</sqlexec>			
+		<!-- 处理日志 -->
+		<mkdir dir="${data_dir}/DSSTATUS/logs"/>
+		<if>
+			<matches pattern="job_exec_[\S]+" string="${job.name}"/>
+			<then>				
+				<ant antfile="${basedir}/conf/base/job_send_log.xml" target="send_execsql_log" inheritAll="false">
+    				<property name="basedir" value="${data_dir}/DSSTATUS/logs/"/>
+					<property name="log.htm" value="${log.htm}"/>
+				</ant>
+			</then>
+		</if>
+	</target>
+
+	
+	<!-- 执行指定SQL文件 -->
+	<target name="exec" description="执行指定SQL文件">
+		<echo file="${log.htm}" append="false" message="&lt;pre&gt;"/>
+		<echo file="${log.htm}" append="true" message="&#13;开始运行作业: ${etl_dd}...${job.name}...To_db:${to_db}...&#13;"/>
+		<echo>开始运行作业: ${etl_dd}...${job.name}...To_db:${to_db}...</echo>
+		<propertyregex property="file.name" input="${job.name}" regexp="job_exec_([\S]*)" select="\1" casesensitive="false" />
+		<var name="file.name" value="${basedir}/conf/sqls/${file.name}.sql"/>
+		<if>
+			<available file="${file.name}"/>
+			<then>
+				<trycatch property="execSqlError">
+					<try>
+						 <retry retrycount="2">
+						 	<sequential>
+		  						<var name="execSqlError2" unset="true"/>
+		  						<trycatch property="execSqlError2">
+									<try>
+										<sqlexec dataSource="dataSource" onerror="stop" append="true" output="${log.htm}" encoding="utf-8">
+											<transaction src="${file.name}"/>
+										</sqlexec>
+										<var name="execResult" value="1"/>
+									</try>
+									<catch>
+										<sleep seconds="10"/>
+										<fail message="${execSqlError2}"/>
+									</catch>
+								</trycatch>
+							</sequential>
+						</retry>	
+					</try>
+					<catch>
+						<var name="execResult" value="-1"/>
+						<echo>执行SQL错误:${execSqlError}</echo>
+						<echo file="${log.htm}" append="false" message="&lt;pre&gt;"/>
+						<echo file="${log.htm}" append="true" message="&#13;运行作业: ${etl_dd}...${job.name}......&#13;"/>
+						<echo file="${log.htm}" append="true" message="&#13;执行SQL错误:${execSqlError}"/>
+						<echo file="${log.htm}" append="true" message="运行作业完毕: ${job.name};Return: ${execResult}&#13;&lt;/pre&gt;"/>
+						<antcall target="ftpLogFile" inheritRefs="true">
+							<param name="jobname" value="${job.name}"/>
+							<param name="loghtm" value="${log.htm}"/>
+							<param name="log_stime" value="${log_stime}"/>
+							
+						</antcall>
+					</catch>
+				</trycatch>
+			</then>
+			<else>
+				<var name="execResult" value="-1"/>
+				<echo>SQL文件不存在:${file.name}</echo>
+				<echo file="${log.htm}" append="false" message="&lt;pre&gt;"/>
+				<echo file="${log.htm}" append="true" message="&#13;运行作业: ${etl_dd}...${job.name}.....&#13;"/>
+				<echo file="${log.htm}" append="true" message="&#13;SQL文件不存在:${file.name}"/>
+				<echo file="${log.htm}" append="true" message="运行作业完毕: ${job.name};Return: ${execResult}&#13;&lt;/pre&gt;"/>
+				<antcall target="ftpLogFile" inheritRefs="true">
+				<param name="jobname" value="${job.name}"/>
+				<param name="loghtm" value="${log.htm}"/>
+				<param name="log_stime" value="${log_stime}"/>
+				</antcall>
+			</else>
+		</if>
+		<echo>运行作业完毕: ${job.name};Return: ${execResult}</echo>
+		<echo file="${log.htm}" append="true" message="运行作业完毕: ${job.name};Return: ${execResult}&#13;&lt;/pre&gt;"/>
+	</target>
+
+	<!-- 直接执行Ant文件,可以选择独立进程运行 -->
+	<target name="exec_ant_file" description="直接执行Ant文件,可以选择独立进程运行">
+		<trycatch property="error_info">
+			<try>				
+				<if>
+					<istrue value="${fork}"/>
+					<then>
+						<antserverex portProperty="as_port"/>
+						<echo message="Ant server listen: ${as_port}..."/>
+						<java
+							classname="org.apache.tools.ant.launch.Launcher"
+							fork="true"
+							clonevm="true"
+							failonerror="true"
+							dir="${basedir}"
+							maxmemory="512m">
+							<arg value="-buildfile"/>
+							<arg value="&quot;${basedir}/conf/xmls/${job.name}.xml&quot;"/>
+							<arg value="-Das_port=${as_port}"/>
+							<arg value="-Dbasedir=&quot;${basedir}&quot;"/>							
+						</java>
+					</then>
+					<else>
+						<ant antfile="${basedir}/conf/xmls/${job.name}.xml" inheritRefs="true" target="default">
+							<property name="etl_dd" value="${etl_dd}"/>
+						</ant>
+					</else>
+				</if>
+				<var name="execResult" value="1"/>
+			</try>
+			<catch>
+				<echo message="Execute Ant file [${basedir}/conf/xmls/${job.name}.xml] error: ${error_info}" level="error"/>
+				<var name="execResult" value="-1"/>
+				<echo file="${log.htm}" append="false" message="&lt;pre&gt;"/>
+				<echo file="${log.htm}" append="true" message="&#13;作业: ${etl_dd}...${job.name}...运行出错...&#13;"/>
+				<echo file="${log.htm}" append="true" message="Execute Ant file [${basedir}/xmls/${job.name}.xml] error: ${error_info} &#13;"/>
+				<var name="execResult" value="-1"/>
+				<antcall target="ftpLogFile" inheritRefs="true">
+					<param name="jobname" value="${job.name}"/>
+					<param name="loghtm" value="${log.htm}"/>
+					<param name="log_stime" value="${log_stime}"/>
+				</antcall>
+				
+			
+			</catch>
+		</trycatch>
+	</target>
+	
+	<target name="ftpLogFile">
+		<echo message="${job.jobTypeStr}---${jobname},${log_stime},${basedir}/${data_dir}/DSSTATUS/logs,${webServerErrorLogsDir}"/>
+		<trycatch property="error_info">
+		<try>
+			<sqlexec datasource="dataSource" hidestatinfo="true" autocommit="true">
+			update sys_sys_desc set job_status='2' where 1='${job.jobTypeStr}' ; 
+			</sqlexec>
+			<!--
+			<ftp server="${webServerIp}"
+				port="${webServerFtpPort}"
+				remotedir="${webServerErrorLogsDir}/${etl_dd}"
+				action="mkdir"
+				userid="${webServerFtpUser}"
+				password="${webServerFtpPassword}" >
+			</ftp>
+			-->
+			<ftp server="${webServerIp}"
+				port="${webServerFtpPort}"
+				remotedir="${webServerErrorLogsDir}"
+				action="put"
+				userid="${webServerFtpUser}"
+				password="${webServerFtpPassword}" >
+				<fileset dir="${basedir}/${data_dir}/DSSTATUS/logs">
+				<include name="${jobname}*${log_stime}*"/>
+				</fileset>
+			</ftp>
+		</try>
+		<catch>
+			<echo message="error happens when Ftp error logs file ${log.htm} to webServerIp:${webServerIp}  webServerFtpPort:${webServerFtpPort} remotedir:${webServerErrorLogsDir}/${etl_dd} webServerFtpUser:${webServerFtpUser}  errorInfo: ${error_info}" level="error"/>
+		</catch>
+		</trycatch>
+</target>
+
+</project>

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="Loadtxt" default="default"  basedir="../..">
+	<taskdef resource="com/nantian/job/task/taskdefs.xml"/>
+	<property file="/conf/base/job_base.properties"/>
+	<property name="xmlfilename" value="job_mq_err_loginfo"/>
+		<tstamp>
+		<format property="log.date" pattern="yyyyMMdd"/>
+	</tstamp>
+	<tstamp>
+		<format property="log.datetime" pattern="yyyy-MM-dd HH:mm:ss.SSS"/>
+	</tstamp>
+	
+	<!--此作业用于记录MQ 接收的消息错误时，录入数据库，当入库失败，则落地为文件-->
+	<!--修复解析的设备编号和序号错位的问题-->
+	<target name="default">		
+		<trycatch property="err">	
+		  		<try>
+		  			<propertyregex property="content.devno"  input="${co}" regexp="(devNo&quot;:&quot;[a-z0-9A-Z]{1,50}&quot;)"  select="\0" casesensitive="false"/>
+						<propertyregex property="content.time"  input="${co}" regexp="(time&quot;:&quot;[0-9]{1,50}&quot;)"  select="\0" casesensitive="false"/>
+						<propertyregex property="content.seqno"  input="${co}" regexp="(seqNo&quot;:&quot;[a-z0-9A-Z]{1,50}&quot;)"  select="\0" casesensitive="false"/>
+					<if>
+						<and>
+						<isset property="content.devno"/>
+						<isset property="content.seqno"/>
+						</and>
+					<then>
+						<propertyregex property="pdevno" input="${content.devno}" regexp="&quot;" replace=""/>
+						<propertyregex property="pdevno1" input="${pdevno}" regexp="devno:" replace="" casesensitive="false"/>
+						<propertyregex property="pseqno" input="${content.seqno}" regexp="&quot;" replace=""/>
+						<propertyregex property="pseqno1" input="${pseqno}" regexp="seqno:" replace="" casesensitive="false"/>
+		 				 <sqlexec datasource="dataSource" hidestatinfo="false" autocommit="true"  onerror="abort" encoding="gbk">
+		  	 				insert into dev_job_err_info
+  		  	 				(seq_no,
+   		  	 				dev_code,
+   		  	 				job_name,
+   		  	 				target_nm,
+   		  	 				errinfo,
+   		  	 				co,
+   		  	 				queue_nm,
+   		  	 				remark,
+   		  	 				ip,
+   		  	 				inputtm
+   		  	 				)
+		  	 				values
+  		  	 				('${pseqno1}',
+   		  	 				'${pdevno1}',
+   		  	 				'${job_nm}',
+   		  	 				'${target_nm}',
+   		  	 				'${errinfo}',
+   		  	 				'${co}',
+   		  	 				'${queue_nm}',
+   		  	 				'',
+   		  	 					'${ip}',
+   		  	 				to_char(sysdate, 'yyyymmddhh24miss')
+   		  	 			);
+		  				</sqlexec>
+		  				</then>
+		  				<else>
+		  				<sqlexec datasource="dataSource" hidestatinfo="false" autocommit="true"  onerror="abort" encoding="gbk">
+		  	 				insert into dev_job_err_info
+  		  	 				(seq_no,
+   		  	 				dev_code,
+   		  	 				job_name,
+   		  	 				target_nm,
+   		  	 				errinfo,
+   		  	 				co,
+   		  	 				queue_nm,
+   		  	 				remark,
+   		  	 				ip,
+   		  	 				inputtm)
+		  	 				values
+  		  	 				(#{seq_no},
+   		  	 				#{dev_code},
+   		  	 				#{job_nm},
+   		  	 				#{target_nm},
+   		  	 				#{errinfo},
+   		  	 				#{co},
+   		  	 				#{queue_nm},
+   		  	 				'',#{ip},
+   		  	 				to_char(sysdate, 'yyyymmddhh24miss')
+   		  	 				);
+		  				</sqlexec>	
+		  				</else>
+		  		</if>		
+					</try>
+			<catch>
+				<echo file="${basedir}/logs/${log.date}_job_mq_err_loginfo.log" append="true" level="info" encoding="gbk">${seq_no}|${dev_code}|${job_name}|${target_nm}|${errinfo}|${co}|${queue_nm}|${ip}|${line.separator}</echo>
+				
+			</catch>
+			</trycatch>
+	</target>
+</project>	

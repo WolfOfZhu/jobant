@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<project name="LOAD_LOG" default="default" basedir="../..">
+	<taskdef resource="com/nantian/job/task/taskdefs.xml"/>
+	<taskdef name="jmsstatus" classname="com.nantian.job.task.jms.JMSStatusTask" onerror="ignore"/>
+	<property file="${basedir}/conf/base/job_base.properties"/>
+	<property file="${basedir}/conf/base/jdbc.properties"/>
+	<ds id="dataSource" driver="${jdbc.driverClassName}" 
+		url="${jdbc.url}" userId="${jdbc.username}"
+		password="${jdbc.password}" />
+		<!-- 初始化监听端口 -->
+		<tstamp>
+			<format property="log.date" pattern="yyyyMMdd"/>
+		</tstamp>
+		<tstamp>
+			<format property="log.datetime" pattern="yyyy-MM-dd HH:mm:ss.SSS"/>
+		</tstamp>
+			<property name="date" value="20180226"/>  
+			<property name="corn" value="* 0/1 * * * ?"/>  
+		<target name="default">		
+			<echo>AntServer开始监听端口：${ant_srv_port}---${basedir}</echo>
+			<forget>
+				<antserver port="${ant_srv_port}"/>
+			</forget>		
+			<job name="job_call_java" cron="0 0/1 * * * ?">
+				<var name="log.datetime" unset="true"/>
+				<tstamp>
+							<format property="log.datetime" pattern="yyyy-MM-dd HH:mm:ss.SSS"/>
+				</tstamp>
+				<echo message="你来吧-${log.datetime}"/>
+			</job>
+			<job name="job_build" cron="0 0/1 * * * ?">
+				<ant antfile="${basedir}/conf/xmls/build.xml" inheritRefs="true" inheritAll="false" target="default"/>
+			</job>
+			<job name="job_wd_casestart" cron="0 0/1 * * * ?">
+				<ant antfile="${basedir}/conf/xmls/job_wd_casestart.xml" inheritRefs="true" inheritAll="false" target="default"/>
+			</job>
+			<job name="job_wd_sendmsg" cron="0 0/1 * * * ?">
+							<ant antfile="${basedir}/conf/xmls/job_wd_sendmsg.xml" inheritRefs="true" inheritAll="false" target="default"/>
+						</job>
+	</target>
+</project>

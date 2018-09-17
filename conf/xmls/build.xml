@@ -1,0 +1,22 @@
+<?xml version="1.0"  encoding="utf-8"?>
+<project name="test" default="default" basedir="..">
+	<taskdef resource="com/nantian/job/task/taskdefs.xml" />
+	<typedef name="irsp" classname="nantian.isrp.task.OperIsrpTask" onerror="ignore" />
+	<property name="xmlfilename" value="job_load_tellercode"/>
+	<property file="${basedir}/conf/base/jdbc.properties" />
+	<!--为文件加MD5码-->
+	<target name="default" >
+			<irsp clientIp="96.0.50.27" clientPort="8001"  datasource="dataSource" clientName="isrp" clientAppid="101005" clientUserid="stms" clientPwd="stms@132" clientjgh="04051" clientfrh="0303" clientgyh="nhadmin" filetype="pdf" filepath="E:\test" response="rst">
+			</irsp>
+		<if>
+			<isset property="rst"/>
+			<then>
+			<echo message="${rst}"/>
+			</then>
+			<else>
+				<echo message="没有符合条件的电子凭证文件需要上传"/>
+			</else>
+			</if>
+		</target>
+
+</project>

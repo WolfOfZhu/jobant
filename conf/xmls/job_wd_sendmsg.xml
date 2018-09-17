@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="ordermsg" default="default" basedir="../..">
+	<taskdef resource="com/nantian/job/task/taskdefs.xml" />
+	<typedef name="smsclient" classname="nantian.sendmsg.task.SmsClient" onerror="ignore" />
+	<property file="${basedir}/conf/base/job_base.properties"/>
+	<property name="xmlfilename" value="job_wd_sendmsg"/>
+	<tstamp>
+		<format property="log.date" pattern="yyyyMMdd"/>
+	</tstamp>
+	<tstamp>
+		<format property="log.datetime" pattern="yyyy-MM-dd HH:mm:ss.SSS"/>
+	</tstamp>
+	<property name="url" value="96.0.42.236"/>
+	<property name="port" value="8081"/>
+		<target name="default">
+		<trycatch property="err1">
+			<try>
+				<sqlexec datasource="dataSource" hidestatinfo="true"    updateProperty="data" autocommit="true" onerror="continue" encoding="gbk">
+					select 'seqno'||s.id as seqno,s.id as no ,s.usrmobil as phone ,replace(s.msgtail,chr(10),'#') as content from w_msgej s where s.flag='2' order by id asc;
+				</sqlexec>
+				<!--获取字段值，发送内容-->
+				<propertyselector property="devlist" delimiter="," match="^seqno([\d]+)no"  select="\1" casesensitive="false"/>
+				<if>
+					<isset property="devlist"/>
+					<then>
+					<sortlist property="sorted.list" value="${devlist}"
+				                 delimiter="," />
+						<for list="${sorted.list}" parallel="false" param="job" threadCount="${threadcount}">
+							<sequential>
+
+								<if>
+									<isset property="seqno@{job}no"/>
+									<then>
+										<antcall  target="sendmsg" inheritRefs="true">
+											<param name="seqNo" value="@{job}"/>
+											<param name="phone" value="${seqno@{job}phone}"/>
+											<param name="content"   value="${seqno@{job}content}"/>
+										</antcall>
+										<var name="seqno@{job}no" unset="true"/>
+									</then>
+								</if>
+							</sequential>
+						</for>
+					</then>
+					<else>
+					</else>
+				</if>	
+				</try>
+			<catch>
+			<ant antfile="${basedir}/conf/xmls/job_mq_err_loginfo.xml"  inheritRefs="true"   target="default">
+					<property name="seq_no" value=""/>
+					<property name="dev_code" value=""/>
+					<property name="job_nm" value="job_wd_sendmsg"/>
+					<property name="target_nm" value="default"/>
+					<property name="errinfo" value="${err1}"/>
+			</ant>
+			</catch>
+		</trycatch>	
+		</target>
+		<target name="sendmsg">
+		<trycatch property="err">
+			<try>
+				<smsclient machine="${url}" port="${port}" phone="${phone}" message="${content}" response="rst"/>
+				<if>
+					<and>
+				 <equals arg1="${rst}" arg2="success" />
+						<isset property="rst"/>
+						</and>
+				 <then>
+				 
+				   <sqlexec datasource="dataSource" hidestatinfo="true" updateProperty="row" autocommit="true" onerror="abort" encoding="gbk">
+					update w_msgej
+						   set flag = '1', update_time = to_char(sysdate, 'yyyymmddhh24miss')
+						 where id = '${seqNo}';							
+					</sqlexec>
+				 </then>
+				 <else>
+				   <sqlexec datasource="dataSource" hidestatinfo="true" updateProperty="row" autocommit="true" onerror="abort" encoding="gbk">
+					update w_msgej
+						   set flag = '3', update_time = to_char(sysdate, 'yyyymmddhh24miss')
+						 where id = '${seqNo}';						
+					</sqlexec>
+				 </else>
+				</if>
+				</try>
+			<catch>
+			<ant antfile="${basedir}/conf/xmls/job_mq_err_loginfo.xml"  inheritRefs="true"   target="default">
+					<property name="seq_no" value="${seqNo}"/>
+					<property name="dev_code" value=""/>
+					<property name="job_nm" value="job_wd_sendmsg"/>
+					<property name="target_nm" value="sendmsg"/>
+					<property name="errinfo" value="${err}"/>
+			</ant>
+			</catch>
+		</trycatch>
+		</target>
+	</project>

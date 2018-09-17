@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="Scheduler" basedir=".." default="default">
+	<taskdef resource="com/nantian/job/task/taskdefs.xml"/>
+	<echo message="basedir is '${basedir}'"/>
+<target name="default">
+	<echo>当前日期路径：${basedir}</echo>
+		<scheduler
+			config="/${basedir}/conf/base/nantian.scheduler.spring.xml"
+			initJob="/${basedir}/conf/base/job_init.xml"
+			basedir="/${basedir}"/>
+	</target>
+</project>
