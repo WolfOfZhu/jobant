@@ -39,4 +39,4 @@
 1. message 发送的信息
 1. phone 发送信息的手机号码 必填
 ---
-###发送的结果response--success，fail
+### 发送的结果response--success，fail
