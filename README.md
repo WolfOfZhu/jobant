@@ -1,5 +1,5 @@
 # ant作业封装
-	## 所需jar包
+## 所需jar包
 * commons-codec-1.10.jar
 * commons-collections-3.2.1.jar
 * fastjson-1.1.35.jar
@@ -13,7 +13,7 @@
 * commons-io-2.6.jar
 * spring-2.0.jar
 ---
-##isrp:内容平台上传电子凭证
+## isrp:内容平台上传电子凭证
 ### 功能描述：上传文件到内容平台，更新数据库 
 1. clientIp // 连接内容平台的ip 必填
 1. clientPort// 端口号 必填
