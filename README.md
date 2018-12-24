@@ -27,7 +27,6 @@
 1. filepath// 上传的电子凭证的根路径必填 （根目录的三级目录是日期目录，有点局限）
 1. filetype// 上传的文件类型,若填空，默认pdf
 1. datasource 数据库连接 必填
----
 ### 返回的结果response--success，fail
 ***
 ##  order:工单处理
@@ -38,5 +37,4 @@
 1. timeOut 超时时间，有默认值 ;
 1. message 发送的信息
 1. phone 发送信息的手机号码 必填
----
 ### 发送的结果response--success，fail
